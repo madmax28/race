@@ -4,3 +4,5 @@ version = "0.1.0"
 authors = ["Maximilian Fricke <mfricke2808@gmail.com>"]
 
 [dependencies]
+#nix = { path = "../nix" }
+nix = "*"
