@@ -20,23 +20,23 @@ fn handle_nix_error(e: nix::Error) -> ! {
     panic!("{}", e);
 }
 
-pub fn fork_child(program: &str, args: Vec<String>) -> Pid {
+pub fn fork_child(program: &str, args: &[String]) -> Pid {
     match unistd::fork() {
         Ok(unistd::ForkResult::Child) => {
             let mut cargs: Vec<ffi::CString> = args.iter()
                 .cloned()
                 .map(|a| ffi::CString::new(a).unwrap())
                 .collect();
-            child(ffi::CString::new(program).unwrap(), cargs);
+            child(&ffi::CString::new(program).unwrap(), &cargs);
         }
         Ok(unistd::ForkResult::Parent { child }) => {
-            return child;
+            child
         }
         Err(e) => handle_nix_error(e),
     }
 }
 
-fn child(program: ffi::CString, args: Vec<ffi::CString>) -> ! {
+fn child(program: &ffi::CString, args: &[ffi::CString]) -> ! {
     if let Err(e) = ptrace::traceme() {
         handle_nix_error(e);
     }
@@ -140,7 +140,7 @@ impl ProcessTree {
             print!("\\_ ");
         }
         println!("{}", process.cmdline);
-        for child in process.children.iter() {
+        for child in &process.children {
             self.dump_proc_recursive(*child, indent + 1);
         }
     }
