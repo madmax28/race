@@ -8,6 +8,8 @@ use std::collections::HashMap;
 use std::ffi;
 use std::fs;
 
+use tui::{AsLines, Tui};
+
 macro_rules! debug {
     ($($arg:tt)+) => ({
         if ::std::env::var_os("RACE_LOG").is_some() {
@@ -29,9 +31,7 @@ pub fn fork_child(program: &str, args: &[String]) -> Pid {
                 .collect();
             child(&ffi::CString::new(program).unwrap(), &cargs);
         }
-        Ok(unistd::ForkResult::Parent { child }) => {
-            child
-        }
+        Ok(unistd::ForkResult::Parent { child }) => child,
         Err(e) => handle_nix_error(e),
     }
 }
@@ -85,7 +85,9 @@ impl Process {
             .expect(&format!("Error reading {}", &filename))
             .iter_mut()
             .map(|c| if *c == 0 { ' ' } else { *c as char })
-            .collect();
+            .collect::<String>()
+            .trim()
+            .to_string();
     }
 }
 
@@ -126,6 +128,7 @@ impl ProcessTree {
         self.get(ppid).unwrap().children.push(idx)
     }
 
+    #[allow(dead_code)]
     fn dump_tree(&self) {
         self.dump_proc_recursive(0, 0);
     }
@@ -143,6 +146,32 @@ impl ProcessTree {
         for child in &process.children {
             self.dump_proc_recursive(*child, indent + 1);
         }
+    }
+
+    fn as_lines_recursive(&self, idx: usize, indent: i32) -> Vec<String> {
+        let process = &self.processes[idx];
+        let mut v = Vec::new();
+        let mut l = String::new();
+
+        for _ in 1..indent {
+            l.push_str("| ");
+        }
+        if indent > 0 {
+            l.push_str("\\_ ");
+        }
+        l.push_str(&process.cmdline);
+        v.push(l);
+        for child in &process.children {
+            v.extend_from_slice(&self.as_lines_recursive(*child, indent + 1));
+        }
+
+        v
+    }
+}
+
+impl AsLines for ProcessTree {
+    fn as_lines(&self) -> Vec<String> {
+        self.as_lines_recursive(0, 0)
     }
 }
 
@@ -259,7 +288,7 @@ impl Race {
         }
     }
 
-    pub fn dump_tree(&self) {
-        self.tracees.dump_tree();
+    pub fn dump_tree(&mut self) {
+        Tui::run(&self.tracees);
     }
 }

@@ -1,4 +1,5 @@
 mod race;
+mod tui;
 
 use race::Race;
 
