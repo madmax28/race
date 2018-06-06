@@ -7,6 +7,7 @@ pub use self::nix::unistd::Pid;
 use std::collections::HashMap;
 use std::ffi;
 use std::fs;
+use std::iter::Iterator;
 
 use tui::{AsLines, Tui};
 
@@ -66,6 +67,7 @@ fn int_to_ptrace_event(i: i32) -> ptrace::Event {
 #[derive(Debug)]
 struct Process {
     pid: Pid,
+    parent: Option<usize>,
     children: Vec<usize>,
     cmdline: String,
 }
@@ -74,6 +76,7 @@ impl Process {
     fn new(pid: Pid) -> Self {
         Process {
             pid,
+            parent: None,
             children: Vec::new(),
             cmdline: "UNKNOWN".to_string(),
         }
@@ -124,53 +127,78 @@ impl ProcessTree {
     }
 
     fn add_child(&mut self, ppid: Pid, pid: Pid) {
-        let idx = self.pid_map[&pid];
-        self.get(ppid).unwrap().children.push(idx)
+        let child_idx = self.pid_map[&pid];
+        self.get(ppid).unwrap().children.push(child_idx);
+        let parent_idx = self.pid_map[&ppid];
+        self.get(pid).unwrap().parent = Some(parent_idx);
     }
+}
 
-    #[allow(dead_code)]
-    fn dump_tree(&self) {
-        self.dump_proc_recursive(0, 0);
-    }
+struct ProcessTreeLineIter<'a> {
+    path: Vec<usize>,
+    visited: Vec<bool>,
+    pt: &'a ProcessTree,
+}
 
-    fn dump_proc_recursive(&self, idx: usize, indent: i32) {
-        let process = &self.processes[idx];
-
-        for _ in 1..indent {
-            print!("| ");
-        }
-        if indent > 0 {
-            print!("\\_ ");
-        }
-        println!("{}", process.cmdline);
-        for child in &process.children {
-            self.dump_proc_recursive(*child, indent + 1);
+impl<'a> ProcessTreeLineIter<'a> {
+    fn new(pt: &'a ProcessTree) -> Self {
+        ProcessTreeLineIter {
+            path: Vec::new(),
+            visited: vec![false; pt.processes.len()],
+            pt,
         }
     }
+}
 
-    fn as_lines_recursive(&self, idx: usize, indent: i32, v: &mut Vec<String>) {
-        let process = &self.processes[idx];
-        let mut l = String::new();
+impl<'a> Iterator for ProcessTreeLineIter<'a> {
+    type Item = String;
 
-        for _ in 1..indent {
-            l.push_str("| ");
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut next = 0;
+        if !self.path.is_empty() {
+            let mut found = false;
+            while let Some(idx) = self.path.pop() {
+                let process = &self.pt.processes[idx];
+                for child_idx in 0..process.children.len() {
+                    if !self.visited[process.children[child_idx]] {
+                        self.path.push(idx);
+                        next = process.children[child_idx];
+                        found = true;
+                        break;
+                    }
+                }
+                if found {
+                    break;
+                }
+            }
+            if !found {
+                return None;
+            }
         }
-        if indent > 0 {
-            l.push_str("\\_ ");
+
+        let mut result = String::new();
+        for i in 1..self.path.len() {
+            let idx = self.path[i - 1];
+            let process = &self.pt.processes[idx];
+            if *process.children.last().unwrap() == self.path[i] {
+                result.push_str("  ");
+            } else {
+                result.push_str("| ");
+            }
         }
-        l.push_str(&process.cmdline);
-        v.push(l);
-        for child in &process.children {
-            self.as_lines_recursive(*child, indent + 1, v);
+        if !self.path.is_empty() {
+            result.push_str("\\_ ");
         }
+        result.push_str(&self.pt.processes[next].cmdline);
+        self.path.push(next);
+        self.visited[next] = true;
+        Some(result)
     }
 }
 
 impl AsLines for ProcessTree {
     fn as_lines(&self) -> Vec<String> {
-        let mut v = Vec::new();
-        self.as_lines_recursive(0, 0, &mut v);
-        v
+        ProcessTreeLineIter::new(&self).collect()
     }
 }
 
