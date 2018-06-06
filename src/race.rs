@@ -45,7 +45,7 @@ fn child(program: &ffi::CString, args: &[ffi::CString]) -> ! {
         handle_nix_error(e);
     }
 
-    panic!(); // Won't come here
+    unreachable!();
 }
 
 fn int_to_ptrace_event(i: i32) -> ptrace::Event {
@@ -148,9 +148,8 @@ impl ProcessTree {
         }
     }
 
-    fn as_lines_recursive(&self, idx: usize, indent: i32) -> Vec<String> {
+    fn as_lines_recursive(&self, idx: usize, indent: i32, v: &mut Vec<String>) {
         let process = &self.processes[idx];
-        let mut v = Vec::new();
         let mut l = String::new();
 
         for _ in 1..indent {
@@ -162,16 +161,16 @@ impl ProcessTree {
         l.push_str(&process.cmdline);
         v.push(l);
         for child in &process.children {
-            v.extend_from_slice(&self.as_lines_recursive(*child, indent + 1));
+            self.as_lines_recursive(*child, indent + 1, v);
         }
-
-        v
     }
 }
 
 impl AsLines for ProcessTree {
     fn as_lines(&self) -> Vec<String> {
-        self.as_lines_recursive(0, 0)
+        let mut v = Vec::new();
+        self.as_lines_recursive(0, 0, &mut v);
+        v
     }
 }
 
