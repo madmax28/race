@@ -135,16 +135,14 @@ impl ProcessTree {
 }
 
 struct ProcessTreeLineIter<'a> {
-    path: Vec<usize>,
-    visited: Vec<bool>,
+    frontier: Vec<(usize, Vec<bool>)>,
     pt: &'a ProcessTree,
 }
 
 impl<'a> ProcessTreeLineIter<'a> {
     fn new(pt: &'a ProcessTree) -> Self {
         ProcessTreeLineIter {
-            path: Vec::new(),
-            visited: vec![false; pt.processes.len()],
+            frontier: vec![(0, vec![true])],
             pt,
         }
     }
@@ -154,44 +152,27 @@ impl<'a> Iterator for ProcessTreeLineIter<'a> {
     type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut next = 0;
-        if !self.path.is_empty() {
-            let mut found = false;
-            while let Some(idx) = self.path.pop() {
-                let process = &self.pt.processes[idx];
-                for child_idx in 0..process.children.len() {
-                    if !self.visited[process.children[child_idx]] {
-                        self.path.push(idx);
-                        next = process.children[child_idx];
-                        found = true;
-                        break;
-                    }
-                }
-                if found {
-                    break;
-                }
-            }
-            if !found {
-                return None;
-            }
+        let (next, trace) = self.frontier.pop()?;
+        let process = &self.pt.processes[next];
+        let prefix = trace
+            .iter()
+            .take(trace.len() - 1)
+            .skip(1)
+            .map(|&x| if x { "  " } else { "| " })
+            .collect::<String>();
+
+        for (idx, c) in process.children.iter().rev().enumerate() {
+            let mut t = trace.clone();
+            t.push(idx == 0);
+            self.frontier.push((*c, t));
         }
 
-        let mut result = String::new();
-        for i in 1..self.path.len() {
-            let idx = self.path[i - 1];
-            let process = &self.pt.processes[idx];
-            if *process.children.last().unwrap() == self.path[i] {
-                result.push_str("  ");
-            } else {
-                result.push_str("| ");
-            }
-        }
-        if !self.path.is_empty() {
-            result.push_str("\\_ ");
-        }
-        result.push_str(&self.pt.processes[next].cmdline);
-        self.path.push(next);
-        self.visited[next] = true;
+        let result = if next == 0 {
+             format!("{}", &self.pt.processes[next].cmdline)
+        } else {
+             format!("{}\\_ {}", prefix, &self.pt.processes[next].cmdline)
+        };
+
         Some(result)
     }
 }
