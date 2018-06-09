@@ -168,7 +168,7 @@ impl<'a> Iterator for ProcessTreeLineIter<'a> {
         }
 
         let result = if next == 0 {
-            format!("{}", &self.pt.processes[next].cmdline)
+            self.pt.processes[next].cmdline.to_string()
         } else {
             format!("{}\\_ {}", prefix, &self.pt.processes[next].cmdline)
         };

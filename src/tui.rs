@@ -1,6 +1,6 @@
 extern crate pancurses;
 
-use self::pancurses::{Input, Window};
+use self::pancurses::*;
 
 use std::cmp::max;
 use std::ops::Add;
@@ -36,6 +36,8 @@ pub struct Tui<'a, T: 'a + AsLines> {
     win: Window,
     src: &'a T,
     lines: Vec<String>,
+    selected_line: i32,
+
     win_h: i32,
     win_w: i32,
     scroll: Pair,
@@ -48,12 +50,13 @@ impl<'a, T: AsLines> Tui<'a, T> {
             win: pancurses::initscr(),
             src,
             lines: Vec::new(),
+            selected_line: 0,
             win_h: 0,
             win_w: 0,
             scroll: Pair::new(0, 0),
             scroll_max: Pair::new(0, 0),
         };
-        pancurses::noecho();
+        noecho();
         tui
     }
 
@@ -68,22 +71,74 @@ impl<'a, T: AsLines> Tui<'a, T> {
             match tui.win.getch() {
                 Some(Input::Character(c)) => match c {
                     'q' => break,
+
                     'h' => tui.scroll(Pair::new(-SCROLL_SPEED, 0)),
-                    'j' => tui.scroll(Pair::new(0, SCROLL_SPEED)),
-                    'k' => tui.scroll(Pair::new(0, -SCROLL_SPEED)),
+                    'j' => {
+                        if tui.selected_line < tui.lines.len() as i32 - 1 {
+                            tui.selected_line += 1;
+                            tui.handle_scrolloff();
+                        }
+                    }
+                    'k' => {
+                        if tui.selected_line > 0 {
+                            tui.selected_line -= 1;
+                            tui.handle_scrolloff();
+                        }
+                    }
                     'l' => tui.scroll(Pair::new(SCROLL_SPEED, 0)),
+
+                    '0' => tui.scroll.x = 0,
+                    '$' => tui.scroll.x = ::std::cmp::max(0, tui.data_width() - tui.win_w),
+                    'g' => {
+                        tui.selected_line = 0;
+                        tui.handle_scrolloff();
+                    }
+                    'G' => {
+                        tui.selected_line = tui.lines.len() as i32 - 1;
+                        tui.handle_scrolloff();
+                    }
+                    'd' => {
+                        tui.selected_line = ::std::cmp::min(
+                            tui.selected_line + tui.win_h / 2,
+                            tui.lines.len() as i32 - 1,
+                        );
+                        tui.handle_scrolloff();
+                    }
+                    'u' => {
+                        tui.selected_line = ::std::cmp::max(tui.selected_line - tui.win_h / 2, 0);
+                        tui.handle_scrolloff();
+                    }
+
                     _ => (),
                 },
                 Some(Input::KeyResize) => {
-                    pancurses::resize_term(0, 0);
+                    resize_term(0, 0);
                     tui.update_size();
-                    tui.redraw();
+                    tui.handle_scrolloff();
                 }
                 Some(_) => (),
                 None => (),
             }
+            tui.redraw();
         }
-        pancurses::endwin();
+
+        endwin();
+    }
+
+    fn handle_scrolloff(&mut self) {
+        let scrolloff = self.win_h / 4;
+
+        let line_top = self.scroll.y;
+        let line_bot = ::std::cmp::min((self.lines.len() as i32) - 1, line_top + self.win_h - 1);
+
+        let diff_top = self.selected_line - line_top;
+        let diff_bot = line_bot - self.selected_line;
+
+        if diff_bot < scrolloff {
+            self.scroll(Pair::new(0, scrolloff - diff_bot));
+        } else if diff_top < scrolloff {
+            self.scroll(Pair::new(0, diff_top - scrolloff));
+        }
     }
 
     fn scroll(&mut self, diff: Pair) {
@@ -102,17 +157,23 @@ impl<'a, T: AsLines> Tui<'a, T> {
 
         if new_scroll != self.scroll {
             self.scroll = new_scroll;
-            self.redraw();
         }
     }
 
     fn redraw(&mut self) {
         self.win.clear();
-        for line in self.lines
+        for (idx, line) in self.lines
             .iter()
+            .enumerate()
             .skip(self.scroll.y as usize)
             .take(self.win_h as usize)
         {
+            if self.selected_line == idx as i32 {
+                self.win.attron(Attribute::Reverse);
+            } else {
+                self.win.attroff(Attribute::Reverse);
+            }
+
             let idx = self.scroll.x as usize;
             if idx < line.len() {
                 self.win.addnstr(&line[idx..], (self.win_w) as usize);
@@ -123,18 +184,21 @@ impl<'a, T: AsLines> Tui<'a, T> {
                 self.win.addch('\n');
             }
         }
+        self.win.refresh();
     }
 
     fn update_size(&mut self) {
         self.win_h = self.win.get_max_y() - self.win.get_beg_y();
         self.win_w = self.win.get_max_x() - self.win.get_beg_x();
 
-        let (data_height, data_width) = (
-            self.lines.len() as i32,
-            self.lines.iter().fold(0, |w, l| max(w, l.len())) as i32,
-        );
+        let data_height = self.lines.len() as i32;
+        let data_width = self.data_width();
 
         self.scroll_max.x = max(0, data_width - self.win_w);
         self.scroll_max.y = max(0, data_height - self.win_h);
+    }
+
+    fn data_width(&self) -> i32 {
+        self.lines.iter().fold(0, |w, l| max(w, l.len())) as i32
     }
 }
