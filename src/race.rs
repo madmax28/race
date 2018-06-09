@@ -168,9 +168,9 @@ impl<'a> Iterator for ProcessTreeLineIter<'a> {
         }
 
         let result = if next == 0 {
-             format!("{}", &self.pt.processes[next].cmdline)
+            format!("{}", &self.pt.processes[next].cmdline)
         } else {
-             format!("{}\\_ {}", prefix, &self.pt.processes[next].cmdline)
+            format!("{}\\_ {}", prefix, &self.pt.processes[next].cmdline)
         };
 
         Some(result)
@@ -198,7 +198,7 @@ impl Race {
     }
 
     pub fn trace(&mut self) {
-        while let Ok(result) = wait::wait() {
+        while let Ok(result) = wait::waitpid(Pid::from_raw(-1), Some(wait::WaitPidFlag::__WALL)) {
             self.handle_wakeup(result);
         }
     }
@@ -285,8 +285,18 @@ impl Race {
     }
 
     fn setopts(&self, pid: Pid) {
-        if let Err(e) = ptrace::setoptions(pid, ptrace::Options::all()) {
-            handle_nix_error(e);
+        use self::ptrace::Options;
+
+        let mut options = Options::PTRACE_O_TRACECLONE | Options::PTRACE_O_TRACEEXEC
+            | Options::PTRACE_O_TRACEFORK | Options::PTRACE_O_TRACEVFORK
+            | Options::PTRACE_O_TRACESYSGOOD | Options::PTRACE_O_EXITKILL;
+
+        if let Err(_) = ptrace::setoptions(pid, options) {
+            debug!("Warning: Setting options failed. Trying without PTRACE_O_EXITKILL");
+            options.remove(Options::PTRACE_O_EXITKILL);
+            if let Err(e) = ptrace::setoptions(pid, options) {
+                handle_nix_error(e);
+            }
         }
     }
 
