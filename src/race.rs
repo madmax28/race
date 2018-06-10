@@ -9,7 +9,8 @@ use std::ffi;
 use std::fs;
 use std::iter::Iterator;
 
-use tui::{Tui, TuiSource};
+use tree::{Node, NodeId, Tree};
+use tui::TreeTui;
 
 macro_rules! debug {
     ($($arg:tt)+) => ({
@@ -65,19 +66,15 @@ fn int_to_ptrace_event(i: i32) -> ptrace::Event {
 }
 
 #[derive(Debug)]
-struct Process {
+struct ProcessData {
     pid: Pid,
-    parent: Option<usize>,
-    children: Vec<usize>,
     cmdline: String,
 }
 
-impl Process {
+impl ProcessData {
     fn new(pid: Pid) -> Self {
-        Process {
+        ProcessData {
             pid,
-            parent: None,
-            children: Vec::new(),
             cmdline: "UNKNOWN".to_string(),
         }
     }
@@ -94,185 +91,59 @@ impl Process {
     }
 }
 
-#[derive(Debug)]
-struct ProcessTree {
-    processes: Vec<Process>,
-    pid_map: HashMap<Pid, usize>,
-}
+impl<'a> IntoIterator for &'a ProcessData {
+    type IntoIter = ProcessLineIter<'a>;
+    type Item = <ProcessLineIter<'a> as Iterator>::Item;
 
-impl ProcessTree {
-    fn new() -> Self {
-        ProcessTree {
-            processes: Vec::new(),
-            pid_map: HashMap::new(),
-        }
-    }
-
-    fn add(&mut self, p: Process) -> &mut Process {
-        assert!(!self.pid_map.contains_key(&p.pid));
-
-        let new_idx = self.processes.len();
-        self.pid_map.insert(p.pid, new_idx);
-        self.processes.push(p);
-        &mut self.processes[new_idx]
-    }
-
-    fn get(&mut self, pid: Pid) -> Option<&mut Process> {
-        let idx = self.pid_map.get(&pid)?;
-        Some(&mut self.processes[*idx])
-    }
-
-    fn maps(&self, pid: Pid) -> bool {
-        self.pid_map.contains_key(&pid)
-    }
-
-    fn add_child(&mut self, ppid: Pid, pid: Pid) {
-        let child_idx = self.pid_map[&pid];
-        let parent_idx = self.pid_map[&ppid];
-        self.processes[child_idx].parent = Some(parent_idx);
-        self.processes[parent_idx].children.push(child_idx);
+    fn into_iter(self) -> Self::IntoIter {
+        ProcessLineIter::new(&self)
     }
 }
 
-#[derive(Clone, Debug)]
-struct ProcessDisplayOptions {
-    expanded: bool,
+struct ProcessLineIter<'a> {
+    proc_data: &'a ProcessData,
+    done: bool,
 }
 
-impl ProcessDisplayOptions {
-    fn new() -> Self {
-        ProcessDisplayOptions { expanded: true }
-    }
-}
-
-#[derive(Debug)]
-struct ProcessTreeTui<'a> {
-    pt: &'a ProcessTree,
-    display_opts: Vec<ProcessDisplayOptions>,
-    proc_lookup: Vec<usize>,
-}
-
-impl<'a> ProcessTreeTui<'a> {
-    fn new(pt: &'a ProcessTree) -> Self {
-        ProcessTreeTui {
-            pt,
-            display_opts: vec![ProcessDisplayOptions::new(); pt.processes.len()],
-            proc_lookup: Vec::new(),
+impl<'a> ProcessLineIter<'a> {
+    fn new(proc_data: &'a ProcessData) -> Self {
+        ProcessLineIter {
+            proc_data,
+            done: false,
         }
     }
 }
 
-impl<'a> TuiSource for ProcessTreeTui<'a> {
-    fn gen_lines(&mut self) -> Vec<String> {
-        self.proc_lookup.clear();
-        ProcessTreeIter::new(self.pt)
-            .filter_map(|path| {
-                // Hide collapsed sub-trees
-                if path.iter()
-                    .rev()
-                    .skip(1)
-                    .any(|idx| !self.display_opts[*idx].expanded)
-                {
-                    return None;
-                }
-
-                let idx = *path.last().unwrap();
-                self.proc_lookup.push(idx);
-
-                let mut prefix = String::new();
-                if path.len() > 1 {
-                    prefix.push_str(&path.iter()
-                        .skip(1)
-                        .take(path.len() - 2)
-                        .map(|idx| {
-                            // Check if this is the last sibling
-                            if *idx == *self.pt.processes[self.pt.processes[*idx].parent.unwrap()]
-                                .children
-                                .last()
-                                .unwrap()
-                            {
-                                "  "
-                            } else {
-                                "| "
-                            }
-                        })
-                        .collect::<String>());
-                    prefix.push_str("\\_ ");
-                }
-
-                let exp = if self.display_opts[idx].expanded {
-                    "[+] "
-                } else {
-                    "[-] "
-                };
-
-                let content = &self.pt.processes[idx].cmdline;
-
-                Some(format!("{}{}{}", prefix, exp, content))
-            })
-            .collect()
-    }
-
-    fn handle_char(&mut self, c: char, line: i32) {
-        match c {
-            ' ' => {
-                let p = &mut self.display_opts[self.proc_lookup[line as usize]];
-                if p.expanded {
-                    p.expanded = false;
-                } else {
-                    p.expanded = true;
-                }
-            }
-            _ => (),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct ProcessTreeIter<'a> {
-    pt: &'a ProcessTree,
-    frontier: Vec<Vec<usize>>,
-}
-
-impl<'a> ProcessTreeIter<'a> {
-    fn new(pt: &'a ProcessTree) -> Self {
-        ProcessTreeIter {
-            pt,
-            frontier: vec![vec![0]],
-        }
-    }
-}
-
-impl<'a> Iterator for ProcessTreeIter<'a> {
-    type Item = Vec<usize>;
+impl<'a> Iterator for ProcessLineIter<'a> {
+    type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let path = self.frontier.pop()?;
-
-        {
-            let process = &self.pt.processes[*path.last().unwrap()];
-            for child_idx in process.children.iter().rev() {
-                let mut p = path.clone();
-                p.push(*child_idx);
-                self.frontier.push(p);
-            }
+        if self.done {
+            None
+        } else {
+            self.done = true;
+            Some(self.proc_data.cmdline.clone())
         }
-
-        Some(path)
     }
 }
+
+type Process = Node<ProcessData>;
+type ProcessTree = Tree<ProcessData>;
 
 #[derive(Debug)]
 pub struct Race {
-    tracees: ProcessTree,
+    pt: ProcessTree,
+    pid_map: HashMap<Pid, NodeId>,
 }
 
 impl Race {
     pub fn new(pid: Pid) -> Self {
+        let root = Process::new(ProcessData::new(pid));
         let mut race = Race {
-            tracees: ProcessTree::new(),
+            pt: ProcessTree::new(root),
+            pid_map: HashMap::new(),
         };
-        race.tracees.add(Process::new(pid));
+        race.pid_map.insert(pid, 0);
         race
     }
 
@@ -296,23 +167,20 @@ impl Race {
                 match sig {
                     SIGTRAP => {
                         // Only expected at initial stop of tracee
-                        assert!(self.tracees.get(pid).is_some());
+                        assert!(self.pid_map.contains_key(&pid));
+
                         self.setopts(pid);
-                        self.tracees.get(pid).unwrap().read_cmdline();
+                        self.read_cmdline(pid);
                         Race::cont(pid, None);
                     }
                     SIGSTOP => {
                         // Expected once per tracee on start
                         self.setopts(pid);
-
-                        // TODO: Replace with if let block once NLL are supported
-                        let p = if self.tracees.maps(pid) {
-                            self.tracees.get(pid).unwrap()
-                        } else {
-                            self.tracees.add(Process::new(pid))
-                        };
-                        p.read_cmdline();
-
+                        if !self.pid_map.contains_key(&pid) {
+                            let id = self.pt.insert(Process::new(ProcessData::new(pid)), None);
+                            self.pid_map.insert(pid, id);
+                        }
+                        self.read_cmdline(pid);
                         Race::cont(pid, None);
                     }
                     _ => {
@@ -342,20 +210,24 @@ impl Race {
             pid, sig, ev, ev_msg
         );
 
-        assert!(self.tracees.get(pid).is_some());
+        assert!(self.pid_map.contains_key(&pid));
 
         match ev {
             PTRACE_EVENT_FORK | PTRACE_EVENT_VFORK | PTRACE_EVENT_CLONE => {
                 let child_pid = Pid::from_raw(ev_msg as i32);
-                if self.tracees.maps(child_pid) {
-                    self.tracees.get(child_pid).unwrap()
+                if !self.pid_map.contains_key(&child_pid) {
+                    let id = self.pt.insert(
+                        Process::new(ProcessData::new(child_pid)),
+                        Some(self.pid_map[&pid]),
+                    );
+                    self.pid_map.insert(child_pid, id);
                 } else {
-                    self.tracees.add(Process::new(child_pid))
-                };
-                self.tracees.add_child(pid, child_pid);
+                    self.pt
+                        .set_parent(self.pid_map[&child_pid], self.pid_map[&pid]);
+                }
             }
             PTRACE_EVENT_EXEC => {
-                self.tracees.get(pid).unwrap().read_cmdline();
+                self.read_cmdline(pid);
             }
             PTRACE_EVENT_VFORK_DONE => (),
             PTRACE_EVENT_EXIT => (),
@@ -366,9 +238,12 @@ impl Race {
     fn setopts(&self, pid: Pid) {
         use self::ptrace::Options;
 
-        let mut options = Options::PTRACE_O_TRACECLONE | Options::PTRACE_O_TRACEEXEC
-            | Options::PTRACE_O_TRACEFORK | Options::PTRACE_O_TRACEVFORK
-            | Options::PTRACE_O_TRACESYSGOOD | Options::PTRACE_O_EXITKILL;
+        let mut options = Options::PTRACE_O_TRACECLONE
+            | Options::PTRACE_O_TRACEEXEC
+            | Options::PTRACE_O_TRACEFORK
+            | Options::PTRACE_O_TRACEVFORK
+            | Options::PTRACE_O_TRACESYSGOOD
+            | Options::PTRACE_O_EXITKILL;
 
         if let Err(_) = ptrace::setoptions(pid, options) {
             debug!("Warning: Setting options failed. Trying without PTRACE_O_EXITKILL");
@@ -385,7 +260,16 @@ impl Race {
         }
     }
 
+    fn read_cmdline(&mut self, pid: Pid) {
+        assert!(self.pid_map.contains_key(&pid));
+
+        self.pt
+            .get_mut(self.pid_map[&pid])
+            .data_mut()
+            .read_cmdline();
+    }
+
     pub fn dump_tree(&mut self) {
-        Tui::run(&mut ProcessTreeTui::new(&self.tracees));
+        TreeTui::run(&self.pt);
     }
 }

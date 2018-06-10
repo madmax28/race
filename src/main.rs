@@ -1,5 +1,6 @@
 mod race;
 mod tui;
+mod tree;
 
 use race::Race;
 
