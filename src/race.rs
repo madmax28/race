@@ -9,7 +9,7 @@ use std::ffi;
 use std::fs;
 use std::iter::Iterator;
 
-use tui::{AsLines, Tui};
+use tui::{Tui, TuiSource};
 
 macro_rules! debug {
     ($($arg:tt)+) => ({
@@ -128,58 +128,137 @@ impl ProcessTree {
 
     fn add_child(&mut self, ppid: Pid, pid: Pid) {
         let child_idx = self.pid_map[&pid];
-        self.get(ppid).unwrap().children.push(child_idx);
         let parent_idx = self.pid_map[&ppid];
-        self.get(pid).unwrap().parent = Some(parent_idx);
+        self.processes[child_idx].parent = Some(parent_idx);
+        self.processes[parent_idx].children.push(child_idx);
     }
 }
 
-struct ProcessTreeLineIter<'a> {
-    frontier: Vec<(usize, Vec<bool>)>,
-    pt: &'a ProcessTree,
+#[derive(Clone, Debug)]
+struct ProcessDisplayOptions {
+    expanded: bool,
 }
 
-impl<'a> ProcessTreeLineIter<'a> {
+impl ProcessDisplayOptions {
+    fn new() -> Self {
+        ProcessDisplayOptions { expanded: true }
+    }
+}
+
+#[derive(Debug)]
+struct ProcessTreeTui<'a> {
+    pt: &'a ProcessTree,
+    display_opts: Vec<ProcessDisplayOptions>,
+    proc_lookup: Vec<usize>,
+}
+
+impl<'a> ProcessTreeTui<'a> {
     fn new(pt: &'a ProcessTree) -> Self {
-        ProcessTreeLineIter {
-            frontier: vec![(0, vec![true])],
+        ProcessTreeTui {
             pt,
+            display_opts: vec![ProcessDisplayOptions::new(); pt.processes.len()],
+            proc_lookup: Vec::new(),
         }
     }
 }
 
-impl<'a> Iterator for ProcessTreeLineIter<'a> {
-    type Item = String;
+impl<'a> TuiSource for ProcessTreeTui<'a> {
+    fn gen_lines(&mut self) -> Vec<String> {
+        self.proc_lookup.clear();
+        ProcessTreeIter::new(self.pt)
+            .filter_map(|path| {
+                // Hide collapsed sub-trees
+                if path.iter()
+                    .rev()
+                    .skip(1)
+                    .any(|idx| !self.display_opts[*idx].expanded)
+                {
+                    return None;
+                }
+
+                let idx = *path.last().unwrap();
+                self.proc_lookup.push(idx);
+
+                let mut prefix = String::new();
+                if path.len() > 1 {
+                    prefix.push_str(&path.iter()
+                        .skip(1)
+                        .take(path.len() - 2)
+                        .map(|idx| {
+                            // Check if this is the last sibling
+                            if *idx == *self.pt.processes[self.pt.processes[*idx].parent.unwrap()]
+                                .children
+                                .last()
+                                .unwrap()
+                            {
+                                "  "
+                            } else {
+                                "| "
+                            }
+                        })
+                        .collect::<String>());
+                    prefix.push_str("\\_ ");
+                }
+
+                let exp = if self.display_opts[idx].expanded {
+                    "[+] "
+                } else {
+                    "[-] "
+                };
+
+                let content = &self.pt.processes[idx].cmdline;
+
+                Some(format!("{}{}{}", prefix, exp, content))
+            })
+            .collect()
+    }
+
+    fn handle_char(&mut self, c: char, line: i32) {
+        match c {
+            ' ' => {
+                let p = &mut self.display_opts[self.proc_lookup[line as usize]];
+                if p.expanded {
+                    p.expanded = false;
+                } else {
+                    p.expanded = true;
+                }
+            }
+            _ => (),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ProcessTreeIter<'a> {
+    pt: &'a ProcessTree,
+    frontier: Vec<Vec<usize>>,
+}
+
+impl<'a> ProcessTreeIter<'a> {
+    fn new(pt: &'a ProcessTree) -> Self {
+        ProcessTreeIter {
+            pt,
+            frontier: vec![vec![0]],
+        }
+    }
+}
+
+impl<'a> Iterator for ProcessTreeIter<'a> {
+    type Item = Vec<usize>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (next, trace) = self.frontier.pop()?;
-        let process = &self.pt.processes[next];
-        let prefix = trace
-            .iter()
-            .take(trace.len() - 1)
-            .skip(1)
-            .map(|&x| if x { "  " } else { "| " })
-            .collect::<String>();
+        let path = self.frontier.pop()?;
 
-        for (idx, c) in process.children.iter().rev().enumerate() {
-            let mut t = trace.clone();
-            t.push(idx == 0);
-            self.frontier.push((*c, t));
+        {
+            let process = &self.pt.processes[*path.last().unwrap()];
+            for child_idx in process.children.iter().rev() {
+                let mut p = path.clone();
+                p.push(*child_idx);
+                self.frontier.push(p);
+            }
         }
 
-        let result = if next == 0 {
-            self.pt.processes[next].cmdline.to_string()
-        } else {
-            format!("{}\\_ {}", prefix, &self.pt.processes[next].cmdline)
-        };
-
-        Some(result)
-    }
-}
-
-impl AsLines for ProcessTree {
-    fn as_lines(&self) -> Vec<String> {
-        ProcessTreeLineIter::new(&self).collect()
+        Some(path)
     }
 }
 
@@ -307,6 +386,6 @@ impl Race {
     }
 
     pub fn dump_tree(&mut self) {
-        Tui::run(&self.tracees);
+        Tui::run(&mut ProcessTreeTui::new(&self.tracees));
     }
 }

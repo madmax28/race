@@ -27,14 +27,16 @@ impl Add for Pair {
     }
 }
 
-pub trait AsLines {
-    fn as_lines(&self) -> Vec<String>;
+pub trait TuiSource {
+    fn gen_lines(&mut self) -> Vec<String>;
+    fn handle_char(&mut self, c: char, line: i32);
 }
 
 #[derive(Debug)]
-pub struct Tui<'a, T: 'a + AsLines> {
+pub struct Tui<'a, T: 'a + TuiSource> {
     win: Window,
-    src: &'a T,
+    src: &'a mut T,
+
     lines: Vec<String>,
     selected_line: i32,
 
@@ -44,10 +46,10 @@ pub struct Tui<'a, T: 'a + AsLines> {
     scroll_max: Pair,
 }
 
-impl<'a, T: AsLines> Tui<'a, T> {
-    fn new(src: &'a T) -> Self {
+impl<'a, T: TuiSource> Tui<'a, T> {
+    fn new(src: &'a mut T) -> Self {
         let tui = Tui {
-            win: pancurses::initscr(),
+            win: initscr(),
             src,
             lines: Vec::new(),
             selected_line: 0,
@@ -60,10 +62,10 @@ impl<'a, T: AsLines> Tui<'a, T> {
         tui
     }
 
-    pub fn run(src: &'a T) {
+    pub fn run(src: &'a mut T) {
         let mut tui = Tui::new(src);
 
-        tui.lines = tui.src.as_lines();
+        tui.lines = tui.src.gen_lines();
         tui.update_size();
         tui.redraw();
 
@@ -109,7 +111,11 @@ impl<'a, T: AsLines> Tui<'a, T> {
                         tui.handle_scrolloff();
                     }
 
-                    _ => (),
+                    c => {
+                        tui.src.handle_char(c, tui.selected_line);
+                        tui.lines = tui.src.gen_lines();
+                        tui.update_size();
+                    }
                 },
                 Some(Input::KeyResize) => {
                     resize_term(0, 0);
