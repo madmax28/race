@@ -33,7 +33,7 @@ dependencies = [
 
 [[package]]
 name = "ncurses"
-version = "5.92.0"
+version = "5.93.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "gcc 0.3.54 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -60,7 +60,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.2.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "ncurses 5.92.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ncurses 5.93.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pdcurses-sys 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "winreg 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -126,7 +126,7 @@ dependencies = [
 "checksum gcc 0.3.54 (registry+https://github.com/rust-lang/crates.io-index)" = "5e33ec290da0d127825013597dbdfc28bee4964690c7ce1166cbc2a7bd08b1bb"
 "checksum libc 0.2.42 (registry+https://github.com/rust-lang/crates.io-index)" = "b685088df2b950fccadf07a7187c8ef846a959c142338a48f9dc0b94517eb5f1"
 "checksum log 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6fddaa003a65722a7fb9e26b0ce95921fe4ba590542ced664d8ce2fa26f9f3ac"
-"checksum ncurses 5.92.0 (registry+https://github.com/rust-lang/crates.io-index)" = "536b7d9e89b5f571a2db383b790524d649cf7a3465d9381fe8159bf8dfd4be7e"
+"checksum ncurses 5.93.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0ecd01d431a5e9c1c733a1e3ab939b9b6c9c4ddc540c74caf3909664127785fa"
 "checksum nix 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d37e713a259ff641624b6cb20e3b12b2952313ba36b6823c0f16e6cfd9e5de17"
 "checksum pancurses 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)" = "cedc1409ecbb0a789f39e2a90ae052df6670c1e1c17724587e1872e6ec270e56"
 "checksum pdcurses-sys 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "90e12bfe55b7080fdfa0742f7a22ce7d5d1da250ca064ae6b81c843a2084fa2a"
