@@ -295,7 +295,7 @@ where
     fn handle_char(&mut self, c: char, line: i32) {
         match c {
             ' ' => {
-                let id: usize = self.lookup[line as usize].into();
+                let id: usize = self.lookup[line as usize];
                 if self.expanded[id] {
                     self.expanded[id] = false;
                 } else {
@@ -307,7 +307,7 @@ where
     }
 }
 
-fn gen_path_prefix<T: TuiTree>(tree: &T, path: &Vec<usize>) -> String {
+fn gen_path_prefix<T: TuiTree>(tree: &T, path: &[usize]) -> String {
     match path.len() {
         0 => panic!("Empty node path"),
         1...2 => "".to_string(),
@@ -324,7 +324,7 @@ fn gen_path_prefix<T: TuiTree>(tree: &T, path: &Vec<usize>) -> String {
     }
 }
 
-fn gen_line_prefix<T: TuiTree>(tt: &TreeTui<T>, path: &Vec<usize>, is_first_line: bool) -> String {
+fn gen_line_prefix<T: TuiTree>(tt: &TreeTui<T>, path: &[usize], is_first_line: bool) -> String {
     let id = *path.last().unwrap();
 
     let expand_marker = if tt.expanded[id] { "[+] " } else { "[-] " };
@@ -333,7 +333,7 @@ fn gen_line_prefix<T: TuiTree>(tt: &TreeTui<T>, path: &Vec<usize>, is_first_line
         is_first_line,
         tt.tree.next_sibling(id).is_some(),
     ) {
-        (0...1, true, _) => format!("{}", expand_marker),
+        (0...1, true, _) => expand_marker.to_string(),
         (0...1, false, _) => "    ".to_string(),
         (_, true, true) => format!("    ├── {}", expand_marker),
         (_, true, false) => format!("    └── {}", expand_marker),

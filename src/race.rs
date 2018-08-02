@@ -82,7 +82,7 @@ impl ProcessData {
     fn read_cmdline(&mut self) {
         let filename = format!("/proc/{}/cmdline", self.pid);
         self.cmdline = fs::read(&filename)
-            .expect(&format!("Error reading {}", &filename))
+            .unwrap_or_else(|_| panic!("Error reading {}", &filename))
             .iter_mut()
             .map(|c| if *c == 0 { ' ' } else { *c as char })
             .collect::<String>()
@@ -245,7 +245,7 @@ impl Race {
             | Options::PTRACE_O_TRACESYSGOOD
             | Options::PTRACE_O_EXITKILL;
 
-        if let Err(_) = ptrace::setoptions(pid, options) {
+        if let Err(_e) = ptrace::setoptions(pid, options) {
             debug!("Warning: Setting options failed. Trying without PTRACE_O_EXITKILL");
             options.remove(Options::PTRACE_O_EXITKILL);
             if let Err(e) = ptrace::setoptions(pid, options) {
