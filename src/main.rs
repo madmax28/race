@@ -1,8 +1,8 @@
 mod race;
-mod tui;
 mod tree;
+mod tui;
 
-use race::Race;
+use crate::race::Race;
 
 use std::process::exit;
 

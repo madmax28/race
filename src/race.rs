@@ -1,16 +1,14 @@
-extern crate nix;
+use nix::sys::{ptrace, signal, wait};
+use nix::unistd;
+pub use nix::unistd::Pid;
 
-use self::nix::sys::{ptrace, signal, wait};
-use self::nix::unistd;
-pub use self::nix::unistd::Pid;
+use crate::tree::{Node, NodeId, Tree};
+use crate::tui::TreeTui;
 
 use std::collections::HashMap;
 use std::ffi;
 use std::fs;
 use std::iter::Iterator;
-
-use tree::{Node, NodeId, Tree};
-use tui::TreeTui;
 
 macro_rules! debug {
     ($($arg:tt)+) => ({
@@ -27,7 +25,7 @@ fn handle_nix_error(e: nix::Error) -> ! {
 pub fn fork_child(program: &str, args: &[String]) -> Pid {
     match unistd::fork() {
         Ok(unistd::ForkResult::Child) => {
-            let mut cargs: Vec<ffi::CString> = args.iter()
+            let cargs: Vec<ffi::CString> = args.iter()
                 .cloned()
                 .map(|a| ffi::CString::new(a).unwrap())
                 .collect();

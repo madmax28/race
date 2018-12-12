@@ -1,12 +1,10 @@
-extern crate pancurses;
+use pancurses::*;
 
-use self::pancurses::*;
+use crate::tree::{Tree, TreeIter};
 
 use std::cmp::max;
 use std::iter::Iterator;
 use std::ops::Add;
-
-use tree::{Tree, TreeIter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Pair {

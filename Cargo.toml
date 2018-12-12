@@ -2,10 +2,11 @@
 name = "race"
 version = "0.1.0"
 authors = ["Maximilian Fricke <mfricke2808@gmail.com>"]
+edition = "2018"
 
 [dependencies]
-nix = "*"
+nix = "0.12"
 
 [dependencies.pancurses]
-pancurses = "*"
+version = "0.16"
 features = ["wide"]
