@@ -2,12 +2,12 @@ use nix::sys::{ptrace, signal, wait};
 use nix::unistd;
 pub use nix::unistd::Pid;
 
+use crate::process::ProcessData;
 use crate::tree::{Node, NodeId, Tree};
-use crate::tui::TreeTui;
+use crate::tui::tv::TreeView;
 
 use std::collections::HashMap;
 use std::ffi;
-use std::fs;
 use std::iter::Iterator;
 
 macro_rules! debug {
@@ -25,7 +25,8 @@ fn handle_nix_error(e: nix::Error) -> ! {
 pub fn fork_child(program: &str, args: &[String]) -> Pid {
     match unistd::fork() {
         Ok(unistd::ForkResult::Child) => {
-            let cargs: Vec<ffi::CString> = args.iter()
+            let cargs: Vec<ffi::CString> = args
+                .iter()
                 .cloned()
                 .map(|a| ffi::CString::new(a).unwrap())
                 .collect();
@@ -63,70 +64,8 @@ fn int_to_ptrace_event(i: i32) -> ptrace::Event {
     }
 }
 
-#[derive(Debug)]
-struct ProcessData {
-    pid: Pid,
-    cmdline: String,
-}
-
-impl ProcessData {
-    fn new(pid: Pid) -> Self {
-        ProcessData {
-            pid,
-            cmdline: "UNKNOWN".to_string(),
-        }
-    }
-
-    fn read_cmdline(&mut self) {
-        let filename = format!("/proc/{}/cmdline", self.pid);
-        self.cmdline = fs::read(&filename)
-            .unwrap_or_else(|_| panic!("Error reading {}", &filename))
-            .iter_mut()
-            .map(|c| if *c == 0 { ' ' } else { *c as char })
-            .collect::<String>()
-            .trim()
-            .to_string();
-    }
-}
-
-impl<'a> IntoIterator for &'a ProcessData {
-    type IntoIter = ProcessLineIter<'a>;
-    type Item = <ProcessLineIter<'a> as Iterator>::Item;
-
-    fn into_iter(self) -> Self::IntoIter {
-        ProcessLineIter::new(&self)
-    }
-}
-
-struct ProcessLineIter<'a> {
-    proc_data: &'a ProcessData,
-    done: bool,
-}
-
-impl<'a> ProcessLineIter<'a> {
-    fn new(proc_data: &'a ProcessData) -> Self {
-        ProcessLineIter {
-            proc_data,
-            done: false,
-        }
-    }
-}
-
-impl<'a> Iterator for ProcessLineIter<'a> {
-    type Item = String;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.done {
-            None
-        } else {
-            self.done = true;
-            Some(self.proc_data.cmdline.clone())
-        }
-    }
-}
-
 type Process = Node<ProcessData>;
-type ProcessTree = Tree<ProcessData>;
+pub type ProcessTree = Tree<ProcessData>;
 
 #[derive(Debug)]
 pub struct Race {
@@ -268,6 +207,6 @@ impl Race {
     }
 
     pub fn dump_tree(&mut self) {
-        TreeTui::run(&self.pt);
+        TreeView::run(&self.pt);
     }
 }

@@ -37,6 +37,7 @@ impl<T> Tree<T> {
         Tree { nodes: vec![root] }
     }
 
+    // TODO: Should take T not Node<T>
     pub fn insert(&mut self, node: Node<T>, parent_id: Option<NodeId>) -> NodeId {
         self.nodes.push(node);
 
