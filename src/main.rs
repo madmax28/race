@@ -1,6 +1,5 @@
 mod process;
 mod race;
-mod tree;
 mod tui;
 
 use crate::race::Race;

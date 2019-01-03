@@ -3,7 +3,7 @@ use nix::unistd;
 pub use nix::unistd::Pid;
 
 use crate::process::ProcessData;
-use crate::tree::{Node, NodeId, Tree};
+use crate::process::tree::{NodeId, ProcessTree};
 use crate::tui::tv::TreeView;
 
 use std::collections::HashMap;
@@ -64,9 +64,6 @@ fn int_to_ptrace_event(i: i32) -> ptrace::Event {
     }
 }
 
-type Process = Node<ProcessData>;
-pub type ProcessTree = Tree<ProcessData>;
-
 #[derive(Debug)]
 pub struct Race {
     pt: ProcessTree,
@@ -75,7 +72,7 @@ pub struct Race {
 
 impl Race {
     pub fn new(pid: Pid) -> Self {
-        let root = Process::new(ProcessData::new(pid));
+        let root = ProcessData::new(pid);
         let mut race = Race {
             pt: ProcessTree::new(root),
             pid_map: HashMap::new(),
@@ -114,7 +111,7 @@ impl Race {
                         // Expected once per tracee on start
                         self.setopts(pid);
                         if !self.pid_map.contains_key(&pid) {
-                            let id = self.pt.insert(Process::new(ProcessData::new(pid)), None);
+                            let id = self.pt.insert(ProcessData::new(pid), None);
                             self.pid_map.insert(pid, id);
                         }
                         self.read_cmdline(pid);
@@ -154,7 +151,7 @@ impl Race {
                 let child_pid = Pid::from_raw(ev_msg as i32);
                 if !self.pid_map.contains_key(&child_pid) {
                     let id = self.pt.insert(
-                        Process::new(ProcessData::new(child_pid)),
+                        ProcessData::new(child_pid),
                         Some(self.pid_map[&pid]),
                     );
                     self.pid_map.insert(child_pid, id);

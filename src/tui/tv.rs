@@ -184,26 +184,26 @@ impl<'a, T: Tree> Iterator for TVLineIter<'a, T> {
 mod tests {
     use super::*;
 
-    use crate::tree::{Node, NodeId, Tree, TreeIter};
+    use crate::process::tree::{NodeId, Tree, TreeIter};
 
     use std::collections::HashMap;
     use std::iter::{IntoIterator, Iterator};
 
-    struct NodeMock {
+    struct ProcessMock {
         num_lines: u32,
         name: String,
     }
 
-    impl NodeMock {
+    impl ProcessMock {
         fn new<T: Into<String>>(num_lines: u32, name: T) -> Self {
-            NodeMock {
+            ProcessMock {
                 num_lines,
                 name: name.into(),
             }
         }
     }
 
-    impl<'a> IntoIterator for &'a NodeMock {
+    impl<'a> IntoIterator for &'a ProcessMock {
         type Item = String;
         type IntoIter = NodeIterMock;
 
@@ -232,8 +232,8 @@ mod tests {
         }
     }
 
-    impl<'a> super::Tree for &'a Tree<NodeMock> {
-        type NodeIter = TreeIter<'a, NodeMock>;
+    impl<'a> super::Tree for &'a Tree<ProcessMock> {
+        type NodeIter = TreeIter<'a, ProcessMock>;
         type LineIter = NodeIterMock;
 
         fn size(&self) -> usize {
@@ -255,11 +255,11 @@ mod tests {
         }
     }
 
-    fn make_tree(n: u32) -> (Tree<NodeMock>, HashMap<String, NodeId>) {
-        let mut t = Tree::new(Node::new(NodeMock {
+    fn make_tree(n: u32) -> (Tree<ProcessMock>, HashMap<String, NodeId>) {
+        let mut t = Tree::new(ProcessMock {
             num_lines: n,
             name: "root".to_string(),
-        }));
+        });
 
         let mut ids = HashMap::new();
         ids.insert("root".to_string(), 0);
@@ -278,7 +278,7 @@ mod tests {
             ("n3111", "n311"),
         ] {
             let parent = ids[&parent.to_string()];
-            let id = t.insert(Node::new(NodeMock::new(n, name.to_string())), Some(parent));
+            let id = t.insert(ProcessMock::new(n, name.to_string()), Some(parent));
             ids.insert(name.to_string(), id);
         }
 
