@@ -115,8 +115,8 @@ impl tui::Backend for Term {
                     self.stdout,
                     "{}",
                     cursor::Goto(cell.pos.x as u16 + 1, cell.pos.y as u16 + 1)
-                    )
-                    .unwrap();
+                )
+                .unwrap();
                 write!(self.stdout, "{}", color::Fg(color::AnsiValue(cell.fg))).unwrap();
                 write!(self.stdout, "{}", color::Bg(color::AnsiValue(cell.bg))).unwrap();
                 write!(self.stdout, "{}", cell.c).unwrap();
@@ -137,10 +137,7 @@ impl tui::Backend for Term {
 
         let size = tui::Point::new(i32::from(self.size.0), i32::from(self.size.1));
         self.frame_idx = 0;
-        self.frame_buf = [
-            tui::Frame::empty(size),
-            tui::Frame::empty(size),
-        ];
+        self.frame_buf = [tui::Frame::empty(size), tui::Frame::empty(size)];
         self.draw(true);
 
         size

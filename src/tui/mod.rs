@@ -157,7 +157,7 @@ where
             TermResized => {
                 self.update_size();
                 self.redraw();
-            },
+            }
             Input(Key(Char(c))) => match c {
                 'q' => return false,
                 'h' => {
