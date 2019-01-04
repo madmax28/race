@@ -1,4 +1,4 @@
-use crate::tui::{Tui, TuiClient};
+use crate::tui::Client;
 
 pub trait Tree {
     type NodeIter: Iterator<Item = Vec<usize>>;
@@ -19,7 +19,7 @@ pub struct TreeView<T: Tree> {
 }
 
 impl<T: Tree> TreeView<T> {
-    fn new(tree: T) -> Self {
+    pub fn new(tree: T) -> Self {
         let size = tree.size();
         TreeView {
             tree,
@@ -27,14 +27,9 @@ impl<T: Tree> TreeView<T> {
             lookup: Vec::new(),
         }
     }
-
-    pub fn run(tree: T) {
-        let mut tv = TreeView::new(tree);
-        Tui::run(&mut tv);
-    }
 }
 
-impl<T: Tree> TuiClient for TreeView<T> {
+impl<T: Tree> Client for TreeView<T> {
     fn gen_lines(&mut self) -> Vec<String> {
         TVLineIter::new(self).collect()
     }
@@ -187,7 +182,6 @@ mod tests {
     use crate::process::tree::{NodeId, Tree, TreeIter};
 
     use std::collections::HashMap;
-    use std::iter::{IntoIterator, Iterator};
 
     struct ProcessMock {
         num_lines: u32,

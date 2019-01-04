@@ -1,8 +1,6 @@
 use crate::process::{ProcessData, ProcessDataLineIter};
 use crate::tui::tv::Tree as TVTree;
 
-use std::iter::Iterator;
-
 pub type NodeId = usize;
 pub type ProcessTree = Tree<ProcessData>;
 
@@ -38,7 +36,9 @@ pub struct Tree<T> {
 
 impl<T> Tree<T> {
     pub fn new(root: T) -> Self {
-        Tree { nodes: vec![Node::new(root)] }
+        Tree {
+            nodes: vec![Node::new(root)],
+        }
     }
 
     pub fn insert(&mut self, data: T, parent_id: Option<NodeId>) -> NodeId {

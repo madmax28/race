@@ -1,10 +1,13 @@
 mod process;
 mod race;
 mod tui;
+mod util;
 
 use crate::race::Race;
 
 use std::process::exit;
+
+type Result<T> = std::result::Result<T, Box<std::error::Error>>;
 
 fn usage() -> ! {
     println!("Usage: race <program> [args..]");

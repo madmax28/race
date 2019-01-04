@@ -1,14 +1,14 @@
 use nix::sys::{ptrace, signal, wait};
 use nix::unistd;
-pub use nix::unistd::Pid;
+use nix::unistd::Pid;
 
-use crate::process::ProcessData;
 use crate::process::tree::{NodeId, ProcessTree};
+use crate::process::ProcessData;
 use crate::tui::tv::TreeView;
+use crate::tui::Tui;
 
 use std::collections::HashMap;
 use std::ffi;
-use std::iter::Iterator;
 
 macro_rules! debug {
     ($($arg:tt)+) => ({
@@ -150,10 +150,9 @@ impl Race {
             PTRACE_EVENT_FORK | PTRACE_EVENT_VFORK | PTRACE_EVENT_CLONE => {
                 let child_pid = Pid::from_raw(ev_msg as i32);
                 if !self.pid_map.contains_key(&child_pid) {
-                    let id = self.pt.insert(
-                        ProcessData::new(child_pid),
-                        Some(self.pid_map[&pid]),
-                    );
+                    let id = self
+                        .pt
+                        .insert(ProcessData::new(child_pid), Some(self.pid_map[&pid]));
                     self.pid_map.insert(child_pid, id);
                 } else {
                     self.pt
@@ -200,10 +199,13 @@ impl Race {
         self.pt
             .get_mut(self.pid_map[&pid])
             .data_mut()
-            .read_cmdline();
+            .read_cmdline()
+            .unwrap();
     }
 
     pub fn dump_tree(&mut self) {
-        TreeView::run(&self.pt);
+        let tv = TreeView::new(&self.pt);
+        let mut tui: Tui<_, crate::tui::term::Term> = Tui::new(tv).unwrap();
+        tui.event_loop();
     }
 }
