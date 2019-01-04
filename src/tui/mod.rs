@@ -154,7 +154,10 @@ where
         use termion::event::Key::*;
 
         match ev {
-            TermResized => self.update_size(),
+            TermResized => {
+                self.update_size();
+                self.redraw();
+            },
             Input(Key(Char(c))) => match c {
                 'q' => return false,
                 'h' => {
