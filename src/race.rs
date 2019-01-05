@@ -4,8 +4,6 @@ use nix::unistd::Pid;
 
 use crate::process::tree::{NodeId, ProcessTree};
 use crate::process::ProcessData;
-use crate::tui::tv::TreeView;
-use crate::tui::Tui;
 
 use std::collections::HashMap;
 use std::ffi;
@@ -85,6 +83,10 @@ impl Race {
         while let Ok(result) = wait::waitpid(Pid::from_raw(-1), Some(wait::WaitPidFlag::__WALL)) {
             self.handle_wakeup(result);
         }
+    }
+
+    pub fn tree(&self) -> &ProcessTree {
+        &self.pt
     }
 
     fn handle_wakeup(&mut self, res: wait::WaitStatus) {
@@ -201,11 +203,5 @@ impl Race {
             .data_mut()
             .read_cmdline()
             .unwrap();
-    }
-
-    pub fn dump_tree(&mut self) {
-        let tv = TreeView::new(&self.pt);
-        let mut tui: Tui<_, crate::tui::term::Term> = Tui::new(tv).unwrap();
-        tui.event_loop();
     }
 }

@@ -3,7 +3,7 @@ mod race;
 mod tui;
 mod util;
 
-use crate::race::Race;
+use crate::tui::{term, tv};
 
 use std::process::exit;
 
@@ -19,7 +19,10 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
     let child = race::fork_child(&program, &args);
-    let mut race = Race::new(child);
+    let mut race = race::Race::new(child);
     race.trace();
-    race.dump_tree();
+
+    let tv = tv::TreeView::new(race.tree());
+    let mut tui: tui::Tui<_, term::Term> = tui::Tui::new(tv).unwrap();
+    tui.event_loop();
 }
