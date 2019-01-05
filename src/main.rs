@@ -4,7 +4,6 @@ mod race;
 mod tui;
 mod util;
 
-use crate::tui::Client;
 use crate::tui::{term, tv};
 
 use std::fs;

@@ -12,11 +12,6 @@ const DARK_GREY: AnsiColor = 234;
 const LIGHT_GREY: AnsiColor = 236;
 const WHITE: AnsiColor = 255;
 
-pub trait Draw {
-    fn draw(&mut self, rect: &Rect, frame: &mut Frame);
-    fn dirty(&self) -> bool;
-}
-
 #[derive(Debug)]
 pub enum Event {
     Input(termion::event::Event),
@@ -96,8 +91,12 @@ where
     fn get_frame_mut(&mut self) -> &mut Frame;
 }
 
+pub trait Draw {
+    fn draw(&mut self, rect: &Rect, frame: &mut Frame);
+    fn dirty(&self) -> bool;
+}
+
 pub trait Client {
-    fn gen_lines(&mut self) -> Vec<String>;
     fn handle_char(&mut self, c: char);
 }
 
@@ -111,12 +110,7 @@ where
     backend: B,
     evq: mpsc::Receiver<Event>,
 
-    lines: Vec<String>,
-    selected_line: i32,
-
     size: Point,
-    scroll: Point,
-    scroll_max: Point,
 }
 
 impl<C, B> Tui<C, B>
@@ -124,20 +118,14 @@ where
     C: Client + Draw,
     B: Backend,
 {
-    pub fn new(mut client: C) -> Result<Self> {
+    pub fn new(client: C) -> Result<Self> {
         let (tx, evq) = mpsc::sync_channel(100);
-        let lines = client.gen_lines();
         let mut tui = Tui {
             client,
             backend: B::new(tx)?,
             evq,
 
-            lines,
-            selected_line: 0,
-
             size: Point::new(0, 0),
-            scroll: Point::new(0, 0),
-            scroll_max: Point::new(0, 0),
         };
         tui.update_size();
         tui.redraw(true);

@@ -164,6 +164,10 @@ impl<T: Tree> TreeView<T> {
 
         self.dirty = true;
     }
+
+    pub fn gen_lines(&mut self) -> Vec<String> {
+        TVLineIter::new(self).collect()
+    }
 }
 
 impl<T: Tree> tui::Draw for TreeView<T> {
@@ -206,10 +210,6 @@ impl<T: Tree> tui::Draw for TreeView<T> {
 }
 
 impl<T: Tree> tui::Client for TreeView<T> {
-    fn gen_lines(&mut self) -> Vec<String> {
-        TVLineIter::new(self).collect()
-    }
-
     fn handle_char(&mut self, c: char) {
         match c {
             ' ' => self.toggle_expand(),
