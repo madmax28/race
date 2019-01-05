@@ -20,11 +20,12 @@ fn handle_nix_error(e: nix::Error) -> ! {
     panic!("{}", e);
 }
 
-pub fn fork_child(program: &str, args: &[String]) -> Pid {
+pub fn fork_child(program: &str, args: &[&str]) -> Pid {
     match unistd::fork() {
         Ok(unistd::ForkResult::Child) => {
-            let cargs: Vec<ffi::CString> = args
+            let cargs: Vec<ffi::CString> = [program]
                 .iter()
+                .chain(args)
                 .cloned()
                 .map(|a| ffi::CString::new(a).unwrap())
                 .collect();
