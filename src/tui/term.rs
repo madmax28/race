@@ -44,8 +44,8 @@ impl tui::Backend for Term {
 
             frame_idx: 0,
             frame_buf: [
-                tui::Frame::empty(tui::Point::new(0, 0)),
-                tui::Frame::empty(tui::Point::new(0, 0)),
+                tui::Frame::new(tui::Point::new(0, 0)),
+                tui::Frame::new(tui::Point::new(0, 0)),
             ],
         };
         write!(term.stdout, "{}", cursor::Hide).unwrap();
@@ -130,14 +130,14 @@ impl tui::Backend for Term {
     fn update_size(&mut self) -> tui::Point {
         self.size = match termion::terminal_size() {
             Ok(sz) => sz,
-            Err(_) => {
-                panic!();
+            Err(e) => {
+                panic!(format!("{}", e));
             }
         };
 
         let size = tui::Point::new(i32::from(self.size.0), i32::from(self.size.1));
         self.frame_idx = 0;
-        self.frame_buf = [tui::Frame::empty(size), tui::Frame::empty(size)];
+        self.frame_buf = [tui::Frame::new(size), tui::Frame::new(size)];
         self.draw(true);
 
         size

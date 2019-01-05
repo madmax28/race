@@ -1,4 +1,7 @@
-use crate::tui::Client;
+use crate::tui;
+use crate::util::Point;
+
+use std::cmp;
 
 pub trait Tree {
     type NodeIter: Iterator<Item = Vec<usize>>;
@@ -14,36 +17,216 @@ pub trait Tree {
 #[derive(Debug)]
 pub struct TreeView<T: Tree> {
     tree: T,
+    lines: Vec<String>,
+
     expanded: Vec<bool>,
     lookup: Vec<usize>,
+
+    size: Point,
+    data_size: Point,
+    scroll: Point,
+    scroll_max: Point,
+    selected_line: i32,
+
+    dirty: bool,
 }
 
 impl<T: Tree> TreeView<T> {
     pub fn new(tree: T) -> Self {
         let size = tree.size();
-        TreeView {
+        let mut tv = TreeView {
             tree,
+            lines: Vec::new(),
+
             expanded: vec![true; size],
             lookup: Vec::new(),
+
+            size: Point::new(0, 0),
+            data_size: Point::new(0, 0),
+            scroll: Point::new(0, 0),
+            scroll_max: Point::new(0, 0),
+            selected_line: 0,
+
+            dirty: false,
+        };
+        tv.fetch_lines();
+        tv
+    }
+
+    fn fetch_lines(&mut self) {
+        self.lines = TVLineIter::new(self).collect();
+
+        self.data_size.y = self.lines.len() as i32;
+        self.data_size.x = self
+            .lines
+            .iter()
+            .map(|s| s.chars().count())
+            .max()
+            .unwrap_or(0) as i32;
+
+        self.update_scroll_max();
+    }
+
+    fn update_size(&mut self, size: Point) {
+        if self.size != size {
+            self.size = size;
+            self.update_scroll_max();
+            self.scroll(0, 0);
         }
+    }
+
+    fn scroll(&mut self, dx: i32, dy: i32) {
+        let old_scroll = self.scroll;
+
+        self.scroll += Point::new(dx, dy);
+        self.scroll.x = cmp::min(self.scroll.x, self.scroll_max.x);
+        self.scroll.y = cmp::min(self.scroll.y, self.scroll_max.y);
+        self.scroll.x = cmp::max(self.scroll.x, 0);
+        self.scroll.y = cmp::max(self.scroll.y, 0);
+
+        if self.scroll != old_scroll {
+            self.dirty = true;
+        }
+    }
+
+    fn scroll_beg(&mut self) {
+        if self.scroll.x > 0 {
+            self.scroll.x = 0;
+            self.dirty = true;
+        }
+    }
+
+    fn scroll_end(&mut self) {
+        if self.scroll.x < self.scroll_max.x {
+            self.scroll.x = self.scroll_max.x;
+            self.dirty = true;
+        }
+    }
+
+    fn update_scroll_max(&mut self) {
+        self.scroll_max.x = cmp::max(0, self.data_size.x - self.size.x);
+        self.scroll_max.y = cmp::max(0, self.data_size.y - self.size.y);
+    }
+
+    fn handle_scrolloff(&mut self) {
+        let scrolloff = self.size.y / 4;
+
+        let line_top = self.scroll.y;
+        let line_bot = cmp::min(self.data_size.y - 1, line_top + self.size.y - 1);
+
+        let diff_top = self.selected_line - line_top;
+        let diff_bot = line_bot - self.selected_line;
+
+        if diff_bot < scrolloff {
+            self.scroll(0, scrolloff - diff_bot);
+        } else if diff_top < scrolloff {
+            self.scroll(0, diff_top - scrolloff);
+        }
+    }
+
+    fn select(&mut self, d: i32) {
+        let old_line = self.selected_line;
+
+        self.selected_line += d;
+        self.selected_line = cmp::min(self.selected_line, self.data_size.y - 1);
+        self.selected_line = cmp::max(self.selected_line, 0);
+
+        if self.selected_line != old_line {
+            self.handle_scrolloff();
+            self.dirty = true;
+        }
+    }
+
+    fn select_first(&mut self) {
+        if self.selected_line > 0 {
+            self.selected_line = 0;
+            self.handle_scrolloff();
+            self.dirty = true;
+        }
+    }
+
+    fn select_last(&mut self) {
+        if self.selected_line < self.data_size.y - 1 {
+            self.selected_line = self.data_size.y - 1;
+            self.handle_scrolloff();
+            self.dirty = true;
+        }
+    }
+
+    fn toggle_expand(&mut self) {
+        let id: usize = self.lookup[self.selected_line as usize];
+        if self.expanded[id] {
+            self.expanded[id] = false;
+        } else {
+            self.expanded[id] = true;
+        }
+        self.fetch_lines();
+
+        self.dirty = true;
     }
 }
 
-impl<T: Tree> Client for TreeView<T> {
+impl<T: Tree> tui::Draw for TreeView<T> {
+    fn draw(&mut self, rect: &tui::Rect, frame: &mut tui::Frame) {
+        self.update_size(rect.max - rect.min + Point::new(1, 1));
+
+        frame.clear_rect(rect);
+        for (y, l) in self
+            .lines
+            .iter()
+            .skip(self.scroll.y as usize)
+            .take(self.size.y as usize)
+            .enumerate()
+        {
+            for (x, c) in l
+                .chars()
+                .skip(self.scroll.x as usize)
+                .take(self.size.x as usize)
+                .enumerate()
+            {
+                let p = Point::new(x as i32, y as i32);
+                assert!(p.x <= rect.max.x);
+                assert!(p.y <= rect.max.y);
+                frame.add(tui::Cell::new(rect.min + p, c));
+            }
+        }
+
+        for p in rect.points() {
+            if p.y == self.selected_line - self.scroll.y {
+                frame.cell_mut(p).bg = tui::LIGHT_GREY;
+            }
+        }
+
+        self.dirty = false;
+    }
+
+    fn dirty(&self) -> bool {
+        self.dirty
+    }
+}
+
+impl<T: Tree> tui::Client for TreeView<T> {
     fn gen_lines(&mut self) -> Vec<String> {
         TVLineIter::new(self).collect()
     }
 
-    fn handle_char(&mut self, c: char, line: i32) {
+    fn handle_char(&mut self, c: char) {
         match c {
-            ' ' => {
-                let id: usize = self.lookup[line as usize];
-                if self.expanded[id] {
-                    self.expanded[id] = false;
-                } else {
-                    self.expanded[id] = true;
-                }
-            }
+            ' ' => self.toggle_expand(),
+
+            'h' => self.scroll(-self.size.x / 4, 0),
+            'j' => self.select(1),
+            'k' => self.select(-1),
+            'l' => self.scroll(self.size.x / 4, 0),
+
+            '0' => self.scroll_beg(),
+            '$' => self.scroll_end(),
+            'g' => self.select_first(),
+            'G' => self.select_last(),
+
+            'd' => self.select(self.size.y / 4),
+            'u' => self.select(-self.size.y / 4),
+
             _ => (),
         }
     }
