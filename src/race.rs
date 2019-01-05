@@ -2,11 +2,15 @@ use nix::sys::{ptrace, signal, wait};
 use nix::unistd;
 use nix::unistd::Pid;
 
+use failure::ResultExt;
+
 use crate::process::tree::{NodeId, ProcessTree};
 use crate::process::ProcessData;
+use crate::Result;
 
 use std::collections::HashMap;
 use std::ffi;
+use std::process;
 
 macro_rules! debug {
     ($($arg:tt)+) => ({
@@ -20,29 +24,15 @@ fn handle_nix_error(e: nix::Error) -> ! {
     panic!("{}", e);
 }
 
-pub fn fork_child(program: &str, args: &[&str]) -> Pid {
-    match unistd::fork() {
-        Ok(unistd::ForkResult::Child) => {
-            let cargs: Vec<ffi::CString> = [program]
-                .iter()
-                .chain(args)
-                .cloned()
-                .map(|a| ffi::CString::new(a).unwrap())
-                .collect();
-            child(&ffi::CString::new(program).unwrap(), &cargs);
-        }
-        Ok(unistd::ForkResult::Parent { child }) => child,
-        Err(e) => handle_nix_error(e),
-    }
-}
-
 fn child(program: &ffi::CString, args: &[ffi::CString]) -> ! {
     if let Err(e) = ptrace::traceme() {
-        handle_nix_error(e);
+        eprintln!("traceme(): {}", e);
+        process::exit(-1);
     }
 
     if let Err(e) = unistd::execvp(&program, &args) {
-        handle_nix_error(e);
+        eprintln!("execvp(): {}", e);
+        process::exit(-1);
     }
 
     unreachable!();
@@ -70,7 +60,7 @@ pub struct Race {
 }
 
 impl Race {
-    pub fn new(pid: Pid) -> Self {
+    fn new(pid: Pid) -> Self {
         let root = ProcessData::new(pid);
         let mut race = Race {
             pt: ProcessTree::new(root),
@@ -78,6 +68,23 @@ impl Race {
         };
         race.pid_map.insert(pid, 0);
         race
+    }
+
+    pub fn fork(program: &str, args: &[&str]) -> Result<Self> {
+        let cargs: Vec<ffi::CString> = [program]
+            .iter()
+            .chain(args)
+            .cloned()
+            .map(|a| {
+                Ok(ffi::CString::new(a)
+                    .with_context(|e| format!("Invalid argument {}: {}", a, e))?)
+            })
+            .collect::<Result<_>>()?;
+
+        match unistd::fork()? {
+            unistd::ForkResult::Child => child(&cargs[0], &cargs),
+            unistd::ForkResult::Parent { child } => Ok(Race::new(child)),
+        }
     }
 
     pub fn trace(&mut self) {

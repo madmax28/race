@@ -11,7 +11,7 @@ use std::fs;
 use std::io;
 use std::io::Write;
 
-type Result<T> = std::result::Result<T, Box<std::error::Error>>;
+type Result<T> = std::result::Result<T, failure::Error>;
 
 fn main() {
     let args = args::parse_args();
@@ -22,8 +22,14 @@ fn main() {
         .and_then(|vs| Some(vs.collect()))
         .unwrap_or_default();
 
-    let child = race::fork_child(&program, &program_args);
-    let mut race = race::Race::new(child);
+    let mut race = match race::Race::fork(&program, &program_args) {
+        Err(e) => {
+            eprintln!("Cannot fork child {}", e);
+            eprintln!("{}", e.backtrace());
+            return;
+        }
+        Ok(race) => race,
+    };
     race.trace();
 
     if let Some(filename) = args.value_of("OUTFILE") {
