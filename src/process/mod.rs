@@ -23,23 +23,21 @@ impl ProcessData {
         let filename = format!("/proc/{}/cmdline", self.pid);
         self.cmdline = fs::read_to_string(&filename)?
             .replace(0 as char, " ")
-            .replace('\n', " ");
+            .trim()
+            .to_string();
 
         Ok(())
     }
 }
 
-#[derive(Debug)]
 pub struct ProcessDataLineIter<'a> {
-    proc_data: &'a ProcessData,
-    done: bool,
+    lines: Box<Iterator<Item = &'a str> + 'a>,
 }
 
 impl<'a> ProcessDataLineIter<'a> {
     fn new(proc_data: &'a ProcessData) -> Self {
         ProcessDataLineIter {
-            proc_data,
-            done: false,
+            lines: Box::new(proc_data.cmdline.lines()),
         }
     }
 }
@@ -48,12 +46,7 @@ impl<'a> Iterator for ProcessDataLineIter<'a> {
     type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.done {
-            None
-        } else {
-            self.done = true;
-            Some(self.proc_data.cmdline.clone())
-        }
+        Some(self.lines.next()?.to_string())
     }
 }
 
@@ -76,7 +69,8 @@ mod tests {
             cmdline: "blab\nlub".to_owned(),
         };
         let mut iter = ProcessDataLineIter::new(&data);
-        assert_eq!(iter.next(), Some("blab\nlub".to_string()));
+        assert_eq!(iter.next(), Some("blab".to_string()));
+        assert_eq!(iter.next(), Some("lub".to_string()));
         assert_eq!(iter.next(), None);
     }
 }
