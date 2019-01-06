@@ -1,10 +1,12 @@
+use serde_derive::{Deserialize, Serialize};
+
 use crate::process::{ProcessData, ProcessDataLineIter};
 use crate::tui::tv::Tree as TVTree;
 
 pub type NodeId = usize;
 pub type ProcessTree = Tree<ProcessData>;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Node<T> {
     data: T,
     parent: Option<NodeId>,
@@ -29,7 +31,7 @@ impl<T> Node<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Tree<T> {
     nodes: Vec<Node<T>>,
 }

@@ -9,6 +9,7 @@ use crate::tui::{term, tv};
 use std::fs;
 use std::io;
 use std::io::Write;
+use std::path;
 
 type Result<T> = std::result::Result<T, failure::Error>;
 
@@ -30,6 +31,28 @@ fn main() {
         Ok(race) => race,
     };
     race.trace();
+
+    // Dump db
+    {
+        let mut filename = "race.json".to_string();
+        let mut n = 0;
+        while path::Path::new(&filename).exists() {
+            filename = format!("race.{}.json", n);
+            n += 1;
+        }
+
+        match fs::File::create(&filename) {
+            Ok(f) => {
+                let mut bw = io::BufWriter::new(f);
+                if let Err(e) = serde_json::to_writer_pretty(&mut bw, &race.tree()) {
+                    eprintln!("Error dumping db: {}", e);
+                }
+            }
+            Err(e) => {
+                eprintln!("Error opening file {}: {}", filename, e);
+            }
+        }
+    }
 
     if let Some(filename) = args.value_of("OUTFILE") {
         match fs::File::create(filename) {

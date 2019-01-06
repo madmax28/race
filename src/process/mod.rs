@@ -1,11 +1,13 @@
 pub mod tree;
 
-use nix::unistd::Pid;
+use serde_derive::{Deserialize, Serialize};
 
 use std::fs;
 use std::io;
 
-#[derive(Debug)]
+type Pid = i32;
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ProcessData {
     pid: Pid,
     cmdline: String,
@@ -57,7 +59,7 @@ mod tests {
     #[test]
     fn proc_data_line_iter() {
         let data = ProcessData {
-            pid: Pid::from_raw(0),
+            pid: 0,
             cmdline: "blablub".to_owned(),
         };
         let mut iter = ProcessDataLineIter::new(&data);
@@ -65,7 +67,7 @@ mod tests {
         assert_eq!(iter.next(), None);
 
         let data = ProcessData {
-            pid: Pid::from_raw(123),
+            pid: 123,
             cmdline: "blab\nlub".to_owned(),
         };
         let mut iter = ProcessDataLineIter::new(&data);
