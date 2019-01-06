@@ -70,10 +70,9 @@ impl Race {
         race
     }
 
-    pub fn fork(program: &str, args: &[&str]) -> Result<Self> {
-        let cargs: Vec<ffi::CString> = [program]
+    pub fn fork(program: &[&str]) -> Result<Self> {
+        let cargs: Vec<ffi::CString> = program
             .iter()
-            .chain(args)
             .cloned()
             .map(|a| {
                 Ok(ffi::CString::new(a)
@@ -93,8 +92,8 @@ impl Race {
         }
     }
 
-    pub fn tree(&self) -> &ProcessTree {
-        &self.pt
+    pub fn into_tree(self) -> ProcessTree {
+        self.pt
     }
 
     fn handle_wakeup(&mut self, res: wait::WaitStatus) {
